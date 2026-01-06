@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
 Secure and open files (client-side).
-- Version: v0.1.0.
+- Version: v0.1.1.
 - AES-256-GCM + PBKDF2 (SHA-256), no network requests.
 - Output format: [SEC01][ver][iter][salt][iv][nameLen][name][ciphertext].
 - The original filename is stored in plaintext in the header.
@@ -35,12 +35,12 @@ Secure and open files (client-side).
     .tab { padding:10px 12px; border-radius: 10px; border:1px solid #ccc; background:#fff; }
     .tab.active { border-color:#333; }
     .hidden { display:none; }
-    .top-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 8px; }
+    .top-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;}
     .lang-switch { display:flex; align-items:center; gap:8px; }
     .lang-switch label { display:inline; margin:0;}
     .lang-switch select { padding: 8px 10px; border-radius: 10px; border: 1px solid #ccc; background:#fff; }
     .how-link { margin-top: 8px; }
-    .how-details { margin: 24px 0; }
+    .how-details { margin: 12px 0 28px 0; }
     .how-details summary { cursor: pointer; font-weight: 600; }
     .how-details[open] summary { margin-bottom: 8px; }
     .how-body { margin-top: 8px; }
@@ -77,6 +77,22 @@ Secure and open files (client-side).
     </div>
   </div>
 
+  <div>
+    <details class="how-details" id="howItWorks">
+    <summary data-i18n="howTitle">How it works</summary>
+    <div class="how-body">
+      <p class="small" data-i18n="howIntro">Securing happens locally in your browser using AES-256-GCM. Your file and passphrase never leave this device.</p>
+      <ul class="small how-list">
+        <li data-i18n="howItem1">Nothing is uploaded; everything stays in your browser.</li>
+        <li data-i18n="howItem2">The result is a .secure file; share it separately from the passphrase.</li>
+        <li data-i18n="howItem3">To open, select the .secure file and enter the same passphrase.</li>
+      </ul>
+      <p class="small how-link">
+        <a id="sourceLink" href="https://github.com/philboiv1n/secure" target="_blank" rel="noopener noreferrer" data-i18n="howSourceLink">View the source code on GitHub</a>
+      </p>
+    </div>
+  </details>
+  </div>
   <div class="card step">
     <h2 data-i18n="step1Title">1. Choose to secure or open a file</h2>
     <div class="vertical-spacer small" data-i18n-html="warnText">
@@ -128,22 +144,9 @@ Secure and open files (client-side).
     </div>
   </div>
 
-  <details class="how-details" id="howItWorks">
-    <summary data-i18n="howTitle">How it works</summary>
-    <div class="how-body">
-      <p class="small" data-i18n="howIntro">Securing happens locally in your browser using AES-256-GCM. Your file and passphrase never leave this device.</p>
-      <ul class="small how-list">
-        <li data-i18n="howItem1">Nothing is uploaded; everything stays in your browser.</li>
-        <li data-i18n="howItem2">The result is a .secure file; share it separately from the passphrase.</li>
-        <li data-i18n="howItem3">To open, select the .secure file and enter the same passphrase.</li>
-      </ul>
-      <p class="small how-link">
-        <a id="sourceLink" href="https://github.com/philboiv1n/secure" target="_blank" rel="noopener noreferrer" data-i18n="howSourceLink">View the source code on GitHub</a>
-      </p>
-    </div>
-  </details>
+
   <footer class="footer">
-    v.0.1.0 - Phil Boivin.<br />
+    v.0.1.1 - Phil Boivin.<br />
   </footer>
 
 <script>
