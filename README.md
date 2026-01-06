@@ -48,8 +48,5 @@ Key settings are in the script near the top:
 - Default language is French.
 - Selection is stored in `localStorage`.
 
-## Source
-The UI includes a “View the source code on GitHub” link. Replace the placeholder URL in `index.html` when the repository is ready.
-
 ## License
-TBD.
+MIT License.
