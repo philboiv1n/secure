@@ -1,0 +1,508 @@
+<!doctype html>
+<!--
+Secure and open files (client-side).
+- Version: v0.1.0.
+- AES-256-GCM + PBKDF2 (SHA-256), no network requests.
+- Output format: [SEC01][ver][iter][salt][iv][nameLen][name][ciphertext].
+- The original filename is stored in plaintext in the header.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'" />
+  <title>Secure and open files (AES-256-GCM)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    h1 { margin: 15px 0; font-size: 24px; }
+    h2 { margin: 10px 0; font-size: 18px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px 16px 24px 16px; margin: 12px 0; }
+    label { display:block; margin: 10px 0 6px;}
+    input[type="password"], input[type="text"] { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
+    input[type="file"] { width: 100%; }
+    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ccc; background: #fff; cursor:pointer; }
+    button:disabled { opacity: 0.6; cursor:not-allowed; }
+    .btn-primary { background: #e6f2ff; border-color: #8bbcff; color: #0b3a75; font-weight: 600; }
+    .btn-primary:hover { background: #d7e9ff; }
+    .btn-primary:focus { outline: 2px solid #80b6ff; outline-offset: 2px; }
+    .small { font-size: 14px; color: #333; }
+    .warn { background: #fff7e6; border: 1px solid #ffd28a; padding: 10px; border-radius: 10px; margin: 20px 0;}
+    .ok { background: #eefbf0; border: 1px solid #bfe7c6; padding: 10px; border-radius: 10px; margin: 20px 0;}
+    .err { background: #fdecec; border: 1px solid #f4b4b4; padding: 10px; border-radius: 10px; margin: 20px 0;}
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
+    .tabs { display:flex; gap:8px;}
+    .tab { padding:10px 12px; border-radius: 10px; border:1px solid #ccc; background:#fff; }
+    .tab.active { border-color:#333; }
+    .hidden { display:none; }
+    .top-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 8px; }
+    .lang-switch { display:flex; align-items:center; gap:8px; }
+    .lang-switch label { display:inline; margin:0;}
+    .lang-switch select { padding: 8px 10px; border-radius: 10px; border: 1px solid #ccc; background:#fff; }
+    .how-link { margin-top: 8px; }
+    .how-details { margin: 24px 0; }
+    .how-details summary { cursor: pointer; font-weight: 600; }
+    .how-details[open] summary { margin-bottom: 8px; }
+    .how-body { margin-top: 8px; }
+    .footer { margin: 24px 0 8px; text-align: center; color: #777; font-size: 12px; }
+    .vertical-spacer {margin: 10px 0;}
+    .top-spacer {margin-top: 15px;}
+    input[type="file"]::file-selector-button {
+      padding: 8px 12px;
+      margin-right: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: #fff;
+      cursor: pointer;
+    }
+    input[type="file"]::-webkit-file-upload-button {
+      padding: 8px 12px;
+      margin-right: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: #fff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <h1 data-i18n="heading">Secure and open files</h1>
+    <div class="lang-switch">
+      <label for="langSelect" data-i18n="langLabel">Language</label>
+      <select id="langSelect">
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card step">
+    <h2 data-i18n="step1Title">1. Choose to secure or open a file</h2>
+    <div class="vertical-spacer small" data-i18n-html="warnText">
+      This page runs locally in your browser. It does <b>not</b> upload files anywhere.
+    </div>
+    <div class="tabs top-spacer">
+      <button class="tab active" id="tabEnc" data-i18n="tabEncrypt">Secure</button>
+      <button class="tab" id="tabDec" data-i18n="tabDecrypt">Open</button>
+    </div>
+  </div>
+
+  <div class="card step">
+    <h2 data-i18n="step2TitleEnc" data-mode="enc">2. Select a file to secure</h2>
+    <h2 class="hidden" data-i18n="step2TitleDec" data-mode="dec">2. Select a file to open</h2>
+    <div class="mode small" data-mode="enc">
+      <label for="encFile" id="encMaxSize"></label>
+      <input class="top-spacer" type="file" id="encFile" />
+    </div>
+    <div class="mode hidden small" data-mode="dec">
+      <label data-i18n="labelEncryptedFile">Secured file (.secure)</label>
+      <input class="top-spacer" type="file" id="decFile" />
+    </div>
+  </div>
+
+  <div class="card step">
+    <h2 data-i18n="step3Title">3. Enter your passphrase</h2>
+    <div class="mode small" data-mode="enc">
+      <label data-i18n="labelPassphraseLong">Passphrase (use 5-7 random words, not a normal password)</label>
+      <input class="top-spacer" type="password" id="encPass" placeholder="e.g., orbit-lamp-frozen-velvet-staple-canyon" data-i18n-placeholder="passPlaceholder" autocomplete="new-password" autocapitalize="off" spellcheck="false" />
+    </div>
+    <div class="mode hidden" data-mode="dec">
+      <input class="top-spacer" type="password" id="decPass" autocomplete="current-password" autocapitalize="off" spellcheck="false" />
+    </div>
+  </div>
+
+  <div class="card step">
+    <h2 data-i18n="step4Title">4. Secure</h2>
+    <div class="mode" data-mode="enc">
+      <div class="actions">
+        <button id="btnEncrypt" class="btn-primary" data-i18n="btnEncrypt">Secure & Download</button>
+      </div>
+      <div id="encMsg"></div>
+    </div>
+    <div class="mode hidden" data-mode="dec">
+      <div class="actions">
+        <button id="btnDecrypt" class="btn-primary" data-i18n="btnDecrypt">Open & Download</button>
+      </div>
+      <div id="decMsg"></div>
+    </div>
+  </div>
+
+  <details class="how-details" id="howItWorks">
+    <summary data-i18n="howTitle">How it works</summary>
+    <div class="how-body">
+      <p class="small" data-i18n="howIntro">Securing happens locally in your browser using AES-256-GCM. Your file and passphrase never leave this device.</p>
+      <ul class="small how-list">
+        <li data-i18n="howItem1">Nothing is uploaded; everything stays in your browser.</li>
+        <li data-i18n="howItem2">The result is a .secure file; share it separately from the passphrase.</li>
+        <li data-i18n="howItem3">To open, select the .secure file and enter the same passphrase.</li>
+      </ul>
+      <p class="small how-link">
+        <a id="sourceLink" href="https://github.com/philboiv1n/secure" target="_blank" rel="noopener noreferrer" data-i18n="howSourceLink">View the source code on GitHub</a>
+      </p>
+    </div>
+  </details>
+  <footer class="footer">
+    v.0.1.0 - Phil Boivin.<br />
+  </footer>
+
+<script>
+(() => {
+  // App constants and crypto parameters.
+  const TEXT_ENCODER = new TextEncoder();
+  const TEXT_DECODER = new TextDecoder();
+  // File format signature for .secure files.
+  const MAGIC = TEXT_ENCODER.encode("SEC01"); // 5 bytes
+  const VERSION = 1;
+  const SALT_LEN = 16;
+  const IV_LEN = 12;
+  const PBKDF2_ITERATIONS = 310000;
+  // Hard cap to avoid large in-memory operations in the browser.
+  const MAX_FILE_BYTES = 200 * 1024 * 1024;
+  const MAX_FILE_MB = Math.round(MAX_FILE_BYTES / (1024 * 1024));
+
+  // UI strings (EN/FR). Keep keys in sync with data-i18n attributes.
+  const I18N = {
+    en: {
+      pageTitle: "Secure and open files (AES-256-GCM)",
+      heading: "Secure and open files",
+      langLabel: "Language",
+      warnText: "This page runs locally in your browser. It does <b>not</b> upload files anywhere.",
+      step1Title: "1. Choose to secure or open a file",
+      step2TitleEnc: "2. Select a file to secure 🔒",
+      step2TitleDec: "2. Select a file to open 🔑",
+      step3Title: "3. Enter your passphrase",
+      step4Title: "4. Secure",
+      maxFileSize: "Maximum file size: {{size}}",
+      howTitle: "How it works",
+      howIntro: "Securing happens locally in your browser using AES-256-GCM. Your file and passphrase never leave this device.",
+      howItem1: "Nothing is uploaded; everything stays in your browser.",
+      howItem2: "The result is a .secure file; share it separately from the passphrase.",
+      howItem3: "To open, select the .secure file and enter the same passphrase.",
+      howSourceLink: "View the source code on GitHub",
+      tabEncrypt: "🔒 Secure",
+      tabDecrypt: "🔑 Open",
+      labelPassphraseLong: "Use 5-7 random words, not a normal password, to secure the file",
+      passPlaceholder: "e.g., orbit-lamp-frozen-velvet-staple-canyon",
+      btnEncrypt: "🔒 Secure & Download",
+      labelEncryptedFile: "Secured file (.secure)",
+      btnDecrypt: "🔑 Open & Download",
+      errFilenameTooLong: "Filename too long.",
+      errBadMagic: "Not a valid .secure file (bad magic).",
+      errUnsupportedVersion: "Unsupported version: {{version}}",
+      errDecryptFailed: "Opening failed. Wrong passphrase or corrupted file.",
+      errPickFile: "Pick a file.",
+      errWeakPass: "Use a stronger passphrase (16+ chars; preferably 5-7 random words).",
+      errFileTooLargeEncrypt: "File is too large to secure in the browser (max 200 MB).",
+      statusEncrypting: "Securing…",
+      statusEncryptDone: "Done. Send the .secure file. Share the passphrase via a separate channel.",
+      errPickEncFile: "Pick a .secure file.",
+      errEnterPass: "Enter the passphrase.",
+      errFileTooLargeDecrypt: "File is too large to open in the browser (max 200 MB).",
+      statusDecrypting: "Opening…",
+      statusDecryptDone: "Done.",
+      defaultFilename: "secure-file.bin"
+    },
+    fr: {
+      pageTitle: "Sécuriser et ouvrir des fichiers (AES-256-GCM)",
+      heading: "Sécuriser et ouvrir des fichiers",
+      langLabel: "Langue",
+      warnText: "Cette page s'exécute localement dans votre navigateur. Elle ne téléverse <b>aucun</b> fichier.",
+      step1Title: "1. Choisissez de sécuriser ou d'ouvrir un fichier",
+      step2TitleEnc: "2. Sélectionnez un fichier à sécuriser 🔒",
+      step2TitleDec: "2. Sélectionnez un fichier à ouvrir 🔑",
+      step3Title: "3. Saisissez votre phrase de passe",
+      step4Title: "4. Sécuriser",
+      maxFileSize: "Taille maximale du fichier : {{size}}",
+      howTitle: "Comment ça marche",
+      howIntro: "Le fichier est sécurisé localement dans votre navigateur (AES-256-GCM). Votre fichier et votre phrase de passe ne quittent jamais cet appareil.",
+      howItem1: "Rien n'est téléversé; tout reste dans votre navigateur.",
+      howItem2: "Le résultat est un fichier .secure; partagez-le séparément de la phrase de passe.",
+      howItem3: "Pour ouvrir, sélectionnez le fichier .secure et saisissez la même phrase de passe.",
+      howSourceLink: "Voir le code source sur GitHub",
+      tabEncrypt: "🔒 Sécuriser",
+      tabDecrypt: "🔑 Ouvrir",
+      labelPassphraseLong: "Utilisez 5 à 7 mots aléatoires, pas un mot de passe classique, afin de sécuriser le fichier",
+      passPlaceholder: "ex. orbit-lamp-frozen-velvet-staple-canyon",
+      btnEncrypt: "🔒 Sécuriser et télécharger",
+      labelEncryptedFile: "Fichier sécurisé (.secure)",
+      btnDecrypt: "🔑 Ouvrir et télécharger",
+      errFilenameTooLong: "Nom de fichier trop long.",
+      errBadMagic: "Fichier .secure non valide (en-tête invalide).",
+      errUnsupportedVersion: "Version non prise en charge : {{version}}",
+      errDecryptFailed: "Échec de l'ouverture. Phrase de passe incorrecte ou fichier corrompu.",
+      errPickFile: "Choisissez un fichier.",
+      errWeakPass: "Utilisez une phrase de passe plus forte (16+ caractères ; idéalement 5 à 7 mots aléatoires).",
+      errFileTooLargeEncrypt: "Le fichier est trop volumineux pour la sécurisation dans le navigateur (max 200 Mo).",
+      statusEncrypting: "Sécurisation…",
+      statusEncryptDone: "Terminé. Envoyez le fichier .secure. Partagez la phrase de passe via un canal séparé.",
+      errPickEncFile: "Choisissez un fichier .secure.",
+      errEnterPass: "Saisissez la phrase de passe.",
+      errFileTooLargeDecrypt: "Le fichier est trop volumineux pour l'ouverture dans le navigateur (max 200 Mo).",
+      statusDecrypting: "Ouverture…",
+      statusDecryptDone: "Terminé.",
+      defaultFilename: "secure-file.bin"
+    }
+  };
+
+  let currentLang = "fr";
+  try {
+    currentLang = localStorage.getItem("lang") || "fr";
+  } catch {}
+
+  const $ = (id) => document.getElementById(id);
+
+  // Simple translation helper with {{var}} interpolation.
+  function t(key, vars = {}) {
+    const dict = I18N[currentLang] || I18N.en;
+    let text = dict[key] || I18N.en[key] || key;
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replace(new RegExp("\{\{\s*" + name + "\s*\}\}", "g"), String(value));
+    }
+    return text;
+  }
+
+  function updateMaxFileSizeLabel() {
+    const el = $("encMaxSize");
+    if (!el) return;
+    el.textContent = t("maxFileSize", { size: MAX_FILE_MB + " MB" });
+  }
+
+  // Apply translations to the DOM and refresh dynamic labels.
+  function applyI18n() {
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      const key = el.getAttribute("data-i18n");
+      el.textContent = t(key);
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach((el) => {
+      const key = el.getAttribute("data-i18n-html");
+      el.innerHTML = t(key);
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+      const key = el.getAttribute("data-i18n-placeholder");
+      el.setAttribute("placeholder", t(key));
+    });
+    document.title = t("pageTitle");
+    updateMaxFileSizeLabel();
+  }
+
+  function setLanguage(lang) {
+    if (!I18N[lang]) lang = "en";
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    try {
+      localStorage.setItem("lang", lang);
+    } catch {}
+    const select = $("langSelect");
+    if (select) select.value = lang;
+    applyI18n();
+  }
+
+  // Toggle Secure/Open views.
+  function setMode(mode) {
+    const isEnc = mode === "enc";
+    $("tabEnc").classList.toggle("active", isEnc);
+    $("tabDec").classList.toggle("active", !isEnc);
+    document.querySelectorAll('[data-mode="enc"]').forEach((el) => {
+      el.classList.toggle("hidden", !isEnc);
+    });
+    document.querySelectorAll('[data-mode="dec"]').forEach((el) => {
+      el.classList.toggle("hidden", isEnc);
+    });
+  }
+
+  function setMsg(el, kind, text) {
+    el.className = kind;
+    el.textContent = text;
+  }
+
+  // Trigger a download without leaving the page.
+  function downloadBlob(blob, filename) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    }, 1000);
+  }
+
+  async function deriveAesKey(passphrase, salt, iterations) {
+    const baseKey = await crypto.subtle.importKey(
+      "raw",
+      TEXT_ENCODER.encode(passphrase),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt,
+        iterations,
+        hash: "SHA-256",
+      },
+      baseKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  function u32ToBytes(n) {
+    const b = new Uint8Array(4);
+    new DataView(b.buffer).setUint32(0, n, false); // big-endian
+    return b;
+  }
+  function bytesToU32(b, off) {
+    return new DataView(b.buffer, b.byteOffset, b.byteLength).getUint32(off, false);
+  }
+
+  function u16ToBytes(n) {
+    const b = new Uint8Array(2);
+    new DataView(b.buffer).setUint16(0, n, false);
+    return b;
+  }
+  function bytesToU16(b, off) {
+    return new DataView(b.buffer, b.byteOffset, b.byteLength).getUint16(off, false);
+  }
+
+  function concatBytes(...parts) {
+    const total = parts.reduce((s, p) => s + p.length, 0);
+    const out = new Uint8Array(total);
+    let o = 0;
+    for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
+  }
+
+  // Build a .secure file with header + AES-GCM ciphertext.
+  async function encryptFile(file, passphrase, iterations) {
+    const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
+    const iv   = crypto.getRandomValues(new Uint8Array(IV_LEN));
+    const key  = await deriveAesKey(passphrase, salt, iterations);
+
+    const plain = new Uint8Array(await file.arrayBuffer());
+    const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain);
+    const cipher = new Uint8Array(cipherBuf);
+
+    const nameBytes = TEXT_ENCODER.encode(file.name);
+    if (nameBytes.length > 65535) throw new Error(t("errFilenameTooLong"));
+
+    // Format:
+    // [MAGIC(5)][VER(1)][ITER(4)][SALT(16)][IV(12)][NAME_LEN(2)][NAME][CIPHERTEXT]
+    const header = concatBytes(
+      MAGIC,
+      new Uint8Array([VERSION]),
+      u32ToBytes(iterations),
+      salt,
+      iv,
+      u16ToBytes(nameBytes.length),
+      nameBytes
+    );
+
+    return new Blob([header, cipher], { type: "application/octet-stream" });
+  }
+
+  // Parse the header and decrypt the payload.
+  async function decryptBlob(blob, passphrase) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let off = 0;
+
+    // magic
+    const magic = bytes.slice(off, off + MAGIC.length); off += MAGIC.length;
+    for (let i = 0; i < MAGIC.length; i++) {
+      if (magic[i] !== MAGIC[i]) throw new Error(t("errBadMagic"));
+    }
+
+    const ver = bytes[off]; off += 1;
+    if (ver !== VERSION) throw new Error(t("errUnsupportedVersion", { version: ver }));
+
+    const iterations = bytesToU32(bytes, off); off += 4;
+    const salt = bytes.slice(off, off + SALT_LEN); off += SALT_LEN;
+    const iv   = bytes.slice(off, off + IV_LEN);   off += IV_LEN;
+
+    const nameLen = bytesToU16(bytes, off); off += 2;
+    const nameBytes = bytes.slice(off, off + nameLen); off += nameLen;
+    const filename = TEXT_DECODER.decode(nameBytes) || t("defaultFilename");
+
+    const cipher = bytes.slice(off);
+
+    const key = await deriveAesKey(passphrase, salt, iterations);
+
+    let plainBuf;
+    try {
+      plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+    } catch {
+      throw new Error(t("errDecryptFailed"));
+    }
+
+    return { filename, blob: new Blob([plainBuf], { type: "application/octet-stream" }) };
+  }
+
+  $("langSelect").addEventListener("change", (event) => {
+    setLanguage(event.target.value);
+  });
+  setLanguage(currentLang);
+
+  // Mode tabs
+  $("tabEnc").addEventListener("click", () => setMode("enc"));
+  $("tabDec").addEventListener("click", () => setMode("dec"));
+  setMode("enc");
+
+  // Secure
+  $("btnEncrypt").addEventListener("click", async () => {
+    const msg = $("encMsg");
+    msg.className = ""; msg.textContent = "";
+
+    const file = $("encFile").files[0];
+    const pass = $("encPass").value;
+    if (!file) return setMsg(msg, "err", t("errPickFile"));
+    if (!pass || pass.length < 16) return setMsg(msg, "err", t("errWeakPass"));
+    if (file.size > MAX_FILE_BYTES) return setMsg(msg, "err", t("errFileTooLargeEncrypt"));
+
+    $("btnEncrypt").disabled = true;
+    setMsg(msg, "ok", t("statusEncrypting"));
+
+    try {
+      const outBlob = await encryptFile(file, pass, PBKDF2_ITERATIONS);
+      const outName = file.name + ".secure";
+      downloadBlob(outBlob, outName);
+      setMsg(msg, "ok", t("statusEncryptDone"));
+    } catch (e) {
+      setMsg(msg, "err", String(e.message || e));
+    } finally {
+      $("btnEncrypt").disabled = false;
+    }
+  });
+
+  // Open
+  $("btnDecrypt").addEventListener("click", async () => {
+    const msg = $("decMsg");
+    msg.className = ""; msg.textContent = "";
+
+    const file = $("decFile").files[0];
+    const pass = $("decPass").value;
+
+    if (!file) return setMsg(msg, "err", t("errPickEncFile"));
+    if (!pass) return setMsg(msg, "err", t("errEnterPass"));
+    if (file.size > MAX_FILE_BYTES) return setMsg(msg, "err", t("errFileTooLargeDecrypt"));
+
+    $("btnDecrypt").disabled = true;
+    setMsg(msg, "ok", t("statusDecrypting"));
+
+    try {
+      const { filename, blob } = await decryptBlob(file, pass);
+      downloadBlob(blob, filename);
+      setMsg(msg, "ok", t("statusDecryptDone"));
+    } catch (e) {
+      setMsg(msg, "err", String(e.message || e));
+    } finally {
+      $("btnDecrypt").disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>
